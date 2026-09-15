@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Minicraft 3D — Blocos Rotbar + Villagers</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
 <style>
   * { margin:0; padding:0; box-sizing:border-box; }
   html,body { width:100%; height:100%; overflow:hidden; background:#000; font-family:'Segoe UI',system-ui,sans-serif; }
@@ -22,12 +23,25 @@
   #minefill { height:100%; width:0%; background:#f0c040; border-radius:6px; }
   #prompt { position:fixed; bottom:92px; left:50%; transform:translateX(-50%); color:#7CFC00; font-size:14px; font-weight:bold; text-shadow:1px 1px 2px #000; background:rgba(0,0,0,.6); padding:4px 14px; border-radius:14px; display:none; z-index:6; }
   #toast { position:fixed; top:56px; left:50%; transform:translateX(-50%); background:rgba(0,0,0,.8); color:#fff; padding:6px 16px; border-radius:20px; font-size:13px; display:none; border:1px solid #f0c040; z-index:7; }
-  #lock { position:fixed; inset:0; background:rgba(5,8,14,.88); display:flex; flex-direction:column; align-items:center; justify-content:center; z-index:20; color:#eee; text-align:center; padding:20px; }
-  #lock h1 { font-size:30px; margin-bottom:6px; } #lock h1 span { color:#7CFC00; }
-  #lock p { color:#aeb8c2; font-size:14px; max-width:560px; line-height:1.7; }
-  #lock b { color:#fff; }
-  #play { margin-top:16px; padding:12px 42px; font-size:18px; border-radius:10px; border:2px solid #7CFC00; background:#1a2b12; color:#7CFC00; cursor:pointer; font-weight:bold; }
-  #play:hover { background:#243d19; }
+  /* ===== telas estilo Minecraft Java ===== */
+  .screen { position:fixed; inset:0; z-index:20; display:flex; flex-direction:column; align-items:center; justify-content:center; }
+  .dirtbg { background-color:#2a1c10; }
+  .dirtbg::before { content:''; position:absolute; inset:0; background:rgba(0,0,0,.55); pointer-events:none; }
+  .screen > * { position:relative; z-index:1; }
+  #logo { font-family:'Press Start 2P',monospace; font-size:42px; color:#e0e0e0; text-shadow:4px 4px 0 #222, -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000; letter-spacing:2px; margin-bottom:2px; }
+  #logo span { color:#7CFC00; }
+  #splashWrap { height:30px; width:340px; max-width:86vw; position:relative; }
+  #splash { position:absolute; right:0; top:-6px; color:#ffff54; font-weight:bold; font-size:17px; text-shadow:2px 2px 0 #3f3f00; transform:rotate(-18deg); animation:pulse 0.5s ease-in-out infinite alternate; white-space:nowrap; }
+  @keyframes pulse { from { scale:1; } to { scale:1.08; } }
+  .mbtns { display:flex; flex-direction:column; gap:6px; margin-top:26px; }
+  .mbtn { width:320px; max-width:82vw; padding:9px; font-size:15px; font-family:inherit; color:#fff; text-shadow:2px 2px 0 #383838; background:linear-gradient(#9e9e9e,#6f6f6f 45%,#5c5c5c); border:2px solid #000; cursor:pointer; }
+  .mbtn:hover { background:linear-gradient(#7d9fd1,#5c7fc4 45%,#4c6fb4); color:#ffffa0; }
+  .mbtn:disabled { color:#a0a0a0; }
+  #foot { position:absolute; bottom:6px; left:0; right:0; display:flex; justify-content:space-between; padding:0 10px; color:#fff; font-size:12px; text-shadow:1px 1px 0 #000; }
+  #optPanel { background:rgba(0,0,0,.6); border:2px solid #000; padding:14px 18px; margin-top:14px; color:#fff; font-size:13px; text-shadow:1px 1px 0 #000; display:flex; flex-direction:column; gap:10px; align-items:center; }
+  #optPanel label { display:flex; gap:10px; align-items:center; }
+  #optPanel .controls { max-width:420px; line-height:1.7; color:#cfcfcf; text-align:center; }
+  .ptitle { color:#fff; font-size:22px; text-shadow:2px 2px 0 #383838; margin-bottom:6px; }
 </style>
 </head>
 <body>
@@ -41,13 +55,29 @@
 <div id="minebar"><div id="minefill"></div></div>
 <div id="prompt"></div>
 <div id="toast"></div>
-<div id="lock">
-  <h1>⛏️ MINI<span>CRAFT</span> 3D</h1>
-  <p><b>WASD</b> mover • <b>mouse</b> olhar • <b>Espaço</b> pular/nadar • <b>Shift</b> correr •
-  <b>clique esq. (segurar)</b> quebrar • <b>clique dir.</b> colocar •
-  <b>1–8 / scroll</b> slot • <b>R</b> gira a ROTBAR • <b>T / E</b> trocar com villager próximo • <b>N</b> novo mundo</p>
-  <button id="play">▶ JOGAR</button>
-  <p style="margin-top:10px;font-size:12px">requer internet (Three.js via CDN)</p>
+<div id="title" class="screen dirtbg">
+  <div id="logo">MINI<span>CRAFT</span></div>
+  <div id="splashWrap"><div id="splash">Que nem o Java!</div></div>
+  <div class="mbtns" id="mainBtns">
+    <button id="btnPlay" class="mbtn">Jogar Singleplayer</button>
+    <button id="btnNewTitle" class="mbtn">Novo Mundo</button>
+    <button id="btnOptions" class="mbtn">Opções...</button>
+  </div>
+  <div id="optPanel" style="display:none">
+    <label>Sensibilidade do mouse: <input id="sens" type="range" min="20" max="250" value="100"></label>
+    <div class="controls"><b>WASD</b> mover • <b>mouse</b> olhar • <b>Espaço</b> pular/nadar • <b>Shift</b> correr •
+    <b>clique esq. (segurar)</b> quebrar • <b>clique dir.</b> colocar • <b>1–8 / scroll</b> slot •
+    <b>R</b> gira a ROTBAR • <b>T / E</b> trocar com villager • <b>N</b> novo mundo</div>
+    <button id="btnOptBack" class="mbtn" style="width:200px">Pronto</button>
+  </div>
+  <div id="foot"><span>Minicraft 1.0 (original, sem Mojang!)</span><span>requer internet (Three.js)</span></div>
+</div>
+<div id="pause" class="screen dirtbg" style="display:none">
+  <div class="ptitle">Menu do jogo</div>
+  <div class="mbtns">
+    <button id="btnBack" class="mbtn">Voltar ao jogo</button>
+    <button id="btnQuit" class="mbtn">Salvar e sair para o título</button>
+  </div>
 </div>
 <script>
 // ================= MINICRAFT 3D (voxel, Three.js) =================
@@ -142,6 +172,7 @@ const cam = new THREE.PerspectiveCamera(75, innerWidth/innerHeight, .1, 500);
 const ren = new THREE.WebGLRenderer({antialias:true});
 ren.setSize(innerWidth, innerHeight);
 document.getElementById('game').appendChild(ren.domElement);
+scene.add(cam); // necessário p/ renderizar a mão em 1ª pessoa
 addEventListener('resize', ()=>{ cam.aspect=innerWidth/innerHeight; cam.updateProjectionMatrix(); ren.setSize(innerWidth,innerHeight); });
 const hemi = new THREE.HemisphereLight(0xbfd9ff, 0x6a7a5a, .9); scene.add(hemi);
 const sun = new THREE.DirectionalLight(0xffffff, .9); scene.add(sun); scene.add(sun.target);
@@ -200,8 +231,10 @@ function rebuild(){
 
 // ================= player =================
 const player = { x:W/2+.5, y:8, z:D/2+.5, vy:0, onGround:false, yaw:Math.PI, pitch:-.1 };
+let mode = 'title', sens = 1, panoA = 0, hand = null; // title | play | pause
 let keys = {};
 addEventListener('keydown', e=>{
+  if(mode!=='play') return;
   keys[e.code]=true;
   if(e.code==='Digit1'){sel=0;renderRotbar();} if(e.code==='Digit2'){sel=1;renderRotbar();}
   if(e.code==='Digit3'){sel=2;renderRotbar();} if(e.code==='Digit4'){sel=3;renderRotbar();}
@@ -215,15 +248,42 @@ addEventListener('keydown', e=>{
 addEventListener('keyup', e=>keys[e.code]=false);
 document.addEventListener('mousemove', e=>{
   if(document.pointerLockElement!==ren.domElement) return;
-  player.yaw -= e.movementX*.0025; player.pitch -= e.movementY*.0025;
+  player.yaw -= e.movementX*.0025*sens; player.pitch -= e.movementY*.0025*sens;
   player.pitch = Math.max(-1.55, Math.min(1.55, player.pitch));
 });
-document.getElementById('play').onclick = ()=>{ document.getElementById('lock').style.display='none'; ren.domElement.requestPointerLock(); };
-ren.domElement.addEventListener('click', ()=>{ if(document.pointerLockElement!==ren.domElement) ren.domElement.requestPointerLock(); });
+// ===== telas (título / pause) estilo MC Java =====
+const titleEl = document.getElementById('title'), pauseEl = document.getElementById('pause');
+(function dirtBg(){
+  const c=document.createElement('canvas'); c.width=c.height=64;
+  const g=c.getContext('2d');
+  g.fillStyle='#6b4a2f'; g.fillRect(0,0,64,64);
+  const cols=['#5a3a22','#7a5636','#4a2f1c'];
+  for(let i=0;i<130;i++){ g.fillStyle=cols[i%3]; g.fillRect((i*13)%64,(i*29)%64,4,4); }
+  const url=`url(${c.toDataURL()})`;
+  titleEl.style.backgroundImage=url; pauseEl.style.backgroundImage=url;
+})();
+const SPLASH=['Que nem o Java!','100% blocos!','Com villagers!','Quebre tudo!','Rotbar giratória!','Sem creepers... ainda!','Punch trees!','Trocas justas!','Também tem 2D!','Feito à mão!'];
+document.getElementById('splash').textContent = SPLASH[Math.floor(Math.random()*SPLASH.length)];
+function lockPointer(){ ren.domElement.requestPointerLock(); }
+document.getElementById('btnPlay').onclick = ()=>{ titleEl.style.display='none'; lockPointer(); };
+document.getElementById('btnNewTitle').onclick = ()=>{ newWorld(); titleEl.style.display='none'; lockPointer(); };
+document.getElementById('btnOptions').onclick = ()=>{
+  const p=document.getElementById('optPanel'), b=document.getElementById('mainBtns');
+  const open = p.style.display==='none';
+  p.style.display=open?'flex':'none'; b.style.display=open?'none':'flex';
+};
+document.getElementById('btnOptBack').onclick = ()=>{
+  document.getElementById('optPanel').style.display='none'; document.getElementById('mainBtns').style.display='flex';
+};
+document.getElementById('sens').oninput = e=>{ sens=e.target.value/100; };
+document.getElementById('btnBack').onclick = ()=>{ lockPointer(); };
+document.getElementById('btnQuit').onclick = ()=>{ mode='title'; pauseEl.style.display='none'; titleEl.style.display='flex'; };
+ren.domElement.addEventListener('click', ()=>{ if(mode==='play'&&document.pointerLockElement!==ren.domElement) lockPointer(); });
 document.addEventListener('pointerlockchange', ()=>{
-  if(document.pointerLockElement!==ren.domElement) document.getElementById('lock').style.display='flex';
+  if(document.pointerLockElement===ren.domElement){ titleEl.style.display='none'; pauseEl.style.display='none'; mode='play'; }
+  else if(mode==='play'){ mode='pause'; pauseEl.style.display='flex'; document.getElementById('prompt').style.display='none'; }
 });
-addEventListener('wheel', e=>{ rotateRotbar(e.deltaY>0?1:-1); }, {passive:true});
+addEventListener('wheel', e=>{ if(mode==='play') rotateRotbar(e.deltaY>0?1:-1); }, {passive:true});
 document.getElementById('btnNew').onclick = ()=> newWorld();
 
 function blockAtFeet(x,y,z){
@@ -367,6 +427,14 @@ function renderRotbar(){
     d.onclick=()=>{ sel=i; renderRotbar(); };
     rotbarEl.appendChild(d);
   });
+  updateHand();
+}
+// bloco segurado (mão em 1ª pessoa)
+function updateHand(){
+  if(hand) cam.remove(hand);
+  hand = new THREE.Mesh(new THREE.BoxGeometry(.26,.26,.26), MATS[rotbar[sel]]);
+  hand.position.set(.34,-.3,-.62); hand.rotation.set(.3,.6,0);
+  cam.add(hand);
 }
 function rotateRotbar(dir){
   if(dir>0) rotbar.push(rotbar.shift()); else rotbar.unshift(rotbar.pop());
@@ -481,6 +549,16 @@ function skyTick(dt){
   document.getElementById('clock').textContent=`Dia ${day} ${String(hh).padStart(2,'0')}:${String(mm).padStart(2,'0')}${dayF<.12?' 🌙':' ☀️'}`;
 }
 
+// panorama girando atrás do título (que nem o Java!)
+function panoTick(dt){
+  panoA += dt*.06;
+  const cxp=W/2, czp=D/2, cyp=topY(cxp,czp)+8;
+  cam.position.set(cxp+Math.cos(panoA)*26, cyp, czp+Math.sin(panoA)*26);
+  cam.lookAt(cxp, cyp-4, czp);
+  sun.position.set(cxp+Math.cos(time*Math.PI*2)*60, Math.sin(time*Math.PI*2)*80+20, czp+30);
+  sun.target.position.set(cxp, 0, czp);
+  document.getElementById('prompt').style.display='none';
+}
 function newWorld(){
   genWorld(Math.floor(Math.random()*1e9));
   time=.3; day=1; mineKey=null; mineProg=0;
@@ -493,7 +571,12 @@ function loop(now){
   requestAnimationFrame(loop);
   const dt=Math.min(.05,(now-last)/1000); last=now;
   fpsA=fpsA*.95+(1/Math.max(dt,1e-4))*.05;
-  step(dt); updateVillagers(dt); mineTick(dt); skyTick(dt); updateCam();
+  if(mode==='title'){ panoTick(dt); skyTick(dt); }
+  else {
+    if(mode==='play'){ step(dt); updateVillagers(dt); mineTick(dt); }
+    skyTick(dt); updateCam();
+    if(hand) hand.rotation.x = .3 + ((mouseL&&mode==='play') ? Math.abs(Math.sin(now*.02))*.7 : 0);
+  }
   ren.render(scene,cam);
   document.getElementById('pos').textContent=`x:${player.x|0} y:${player.y|0} z:${player.z|0}`;
   document.getElementById('fps').textContent=Math.round(fpsA)+' fps';
