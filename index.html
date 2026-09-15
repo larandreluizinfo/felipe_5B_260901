@@ -19,9 +19,9 @@
   .slot.sel { border-color:#f0c040; box-shadow:0 0 8px #f0c040; transform:translateY(-4px); }
   .slot .n { position:absolute; bottom:1px; right:4px; font-size:11px; font-weight:bold; color:#fff; text-shadow:1px 1px 0 #000; }
   .slot .k { position:absolute; top:1px; left:4px; font-size:10px; color:#999; }
-  #minebar { position:fixed; bottom:76px; left:50%; transform:translateX(-50%); width:220px; height:10px; background:rgba(0,0,0,.6); border:1px solid #888; border-radius:6px; display:none; z-index:6; }
+  #minebar { position:fixed; bottom:104px; left:50%; transform:translateX(-50%); width:220px; height:10px; background:rgba(0,0,0,.6); border:1px solid #888; border-radius:6px; display:none; z-index:6; }
   #minefill { height:100%; width:0%; background:#f0c040; border-radius:6px; }
-  #prompt { position:fixed; bottom:92px; left:50%; transform:translateX(-50%); color:#7CFC00; font-size:14px; font-weight:bold; text-shadow:1px 1px 2px #000; background:rgba(0,0,0,.6); padding:4px 14px; border-radius:14px; display:none; z-index:6; }
+  #prompt { position:fixed; bottom:120px; left:50%; transform:translateX(-50%); color:#7CFC00; font-size:14px; font-weight:bold; text-shadow:1px 1px 2px #000; background:rgba(0,0,0,.6); padding:4px 14px; border-radius:14px; display:none; z-index:6; }
   #toast { position:fixed; top:56px; left:50%; transform:translateX(-50%); background:rgba(0,0,0,.8); color:#fff; padding:6px 16px; border-radius:20px; font-size:13px; display:none; border:1px solid #f0c040; z-index:7; }
   /* ===== telas estilo Minecraft Java ===== */
   .screen { position:fixed; inset:0; z-index:20; display:flex; flex-direction:column; align-items:center; justify-content:center; }
@@ -38,6 +38,8 @@
   .mbtn:hover { background:linear-gradient(#7d9fd1,#5c7fc4 45%,#4c6fb4); color:#ffffa0; }
   .mbtn:disabled { color:#a0a0a0; }
   #foot { position:absolute; bottom:6px; left:0; right:0; display:flex; justify-content:space-between; padding:0 10px; color:#fff; font-size:12px; text-shadow:1px 1px 0 #000; }
+  #hearts { position:fixed; bottom:78px; left:50%; transform:translateX(-50%); font-size:17px; z-index:6; text-shadow:1px 1px 0 #000; letter-spacing:1px; pointer-events:none; }
+  #dmg { position:fixed; inset:0; background:#c00; opacity:0; pointer-events:none; z-index:14; transition:opacity .3s; }
   #optPanel { background:rgba(0,0,0,.6); border:2px solid #000; padding:14px 18px; margin-top:14px; color:#fff; font-size:13px; text-shadow:1px 1px 0 #000; display:flex; flex-direction:column; gap:10px; align-items:center; }
   #optPanel label { display:flex; gap:10px; align-items:center; }
   #optPanel .controls { max-width:420px; line-height:1.7; color:#cfcfcf; text-align:center; }
@@ -68,13 +70,27 @@
 <div id="minebar"><div id="minefill"></div></div>
 <div id="prompt"></div>
 <div id="toast"></div>
+<div id="hearts"></div>
+<div id="dmg"></div>
+<div id="death" class="screen dirtbg" style="display:none">
+  <div class="ptitle" style="font-size:26px">Você morreu!</div>
+  <div class="mbtns">
+    <button id="btnRespawn" class="mbtn">Renascer</button>
+    <button id="btnDeadQuit" class="mbtn">Voltar ao título</button>
+  </div>
+</div>
 <div id="title" class="screen dirtbg">
   <div id="logo">MINI<span>CRAFT</span></div>
   <div id="splashWrap"><div id="splash">Que nem o Java!</div></div>
   <div class="mbtns" id="mainBtns">
-    <button id="btnPlay" class="mbtn">Jogar Singleplayer</button>
+    <button id="btnPlay" class="mbtn">Singleplayer</button>
     <button id="btnNewTitle" class="mbtn">Novo Mundo</button>
     <button id="btnOptions" class="mbtn">Opções...</button>
+  </div>
+  <div class="mbtns" id="modeBtns" style="display:none">
+    <button id="btnSurv" class="mbtn">⛏ Sobrevivência</button>
+    <button id="btnCreat" class="mbtn">🕊 Criativo</button>
+    <button id="btnModeBack" class="mbtn">Voltar</button>
   </div>
   <div id="optPanel" style="display:none">
     <label>Sensibilidade do mouse: <input id="sens" type="range" min="20" max="250" value="100"></label>
@@ -178,6 +194,7 @@ function genWorld(s){
       player.x=x+.5; player.z=z+.5; player.y=h+1.01; player.vy=0; break outer;
     }
   }
+  spawnPos = { x:player.x, y:player.y, z:player.z };
   spawnVillagers();
 }
 function topY(x,z){
@@ -253,7 +270,9 @@ function rebuild(){
 
 // ================= player =================
 const player = { x:W/2+.5, y:8, z:D/2+.5, vy:0, onGround:false, yaw:Math.PI, pitch:-.1 };
-let mode = 'title', sens = 1, panoA = 0, hand = null; // title | play | pause
+let mode = 'title', sens = 1, panoA = 0, hand = null; // title | play | pause | inv | dead
+let gameMode = 'survival', hp = 20, flying = false, falling = false, fallTop = 0, lastSpace = 0, creativeCd = 0;
+let spawnPos = { x:W/2+.5, y:9, z:D/2+.5 };
 let keys = {};
 addEventListener('keydown', e=>{
   if(e.code==='KeyE'){ if(mode==='play') openInv(); else if(mode==='inv') closeInv(); return; }
@@ -267,6 +286,11 @@ addEventListener('keydown', e=>{
   if(e.code==='KeyR') rotateRotbar(1);
   if(e.code==='KeyT') tryTrade();
   if(e.code==='KeyN') newWorld();
+  if(e.code==='Space'&&gameMode==='creative'){
+    const now=performance.now();
+    if(now-lastSpace<300){ flying=!flying; player.vy=0; toast(flying?'🕊 Voando! Espaço sobe, Shift desce':'🚶 Andando'); }
+    lastSpace=now;
+  }
   if(['Space','ArrowUp'].includes(e.code)) e.preventDefault();
 });
 addEventListener('keyup', e=>keys[e.code]=false);
@@ -286,11 +310,53 @@ const titleEl = document.getElementById('title'), pauseEl = document.getElementB
   const url=`url(${c.toDataURL()})`;
   titleEl.style.backgroundImage=url; pauseEl.style.backgroundImage=url;
 })();
-const SPLASH=['Que nem o Java!','100% blocos!','Com villagers!','Quebre tudo!','Rotbar giratória!','Sem creepers... ainda!','Punch trees!','Trocas justas!','Também tem 2D!','Feito à mão!'];
+const SPLASH=['Que nem o Java!','100% blocos!','Com villagers!','Quebre tudo!','Rotbar giratória!','Sem creepers... ainda!','Punch trees!','Trocas justas!','Criativo ou survival!','Cuidado com a queda!'];
 document.getElementById('splash').textContent = SPLASH[Math.floor(Math.random()*SPLASH.length)];
 function lockPointer(){ ren.domElement.requestPointerLock(); }
-document.getElementById('btnPlay').onclick = ()=>{ titleEl.style.display='none'; lockPointer(); };
-document.getElementById('btnNewTitle').onclick = ()=>{ newWorld(); titleEl.style.display='none'; lockPointer(); };
+// ===== vida / morte (sobrevivência) =====
+function updateHearts(){
+  const el=document.getElementById('hearts');
+  if(gameMode!=='survival'){ el.style.display='none'; return; }
+  el.style.display='block';
+  const full=Math.max(0,Math.min(10,Math.ceil(hp/2)));
+  el.textContent='❤'.repeat(full)+'🖤'.repeat(10-full);
+}
+function hurt(n){
+  if(gameMode!=='survival'||mode==='dead') return;
+  hp-=n;
+  const d=document.getElementById('dmg'); d.style.opacity=.55; setTimeout(()=>d.style.opacity=0,200);
+  updateHearts();
+  if(hp<=0) die();
+}
+function die(){
+  mode='dead'; hp=0; updateHearts();
+  document.getElementById('death').style.display='flex';
+  if(document.exitPointerLock) document.exitPointerLock();
+}
+function respawn(){
+  hp=20; falling=false; fallTop=0; player.vy=0; flying=false;
+  player.x=spawnPos.x; player.y=spawnPos.y; player.z=spawnPos.z;
+  document.getElementById('death').style.display='none';
+  updateHearts(); mode='play'; lockPointer();
+}
+const mainBtns=document.getElementById('mainBtns'), modeBtns=document.getElementById('modeBtns');
+try{ const m=localStorage.getItem('mc_mode'); if(m==='creative'||m==='survival') gameMode=m; }catch(e){}
+function showMode(){ mainBtns.style.display='none'; document.getElementById('optPanel').style.display='none'; modeBtns.style.display='flex'; }
+function startGame(m){
+  gameMode=m; flying=false; hp=20; updateHearts();
+  try{ localStorage.setItem('mc_mode',m); }catch(e){}
+  titleEl.style.display='none'; modeBtns.style.display='none'; mainBtns.style.display='flex';
+  renderRotbar();
+  toast(m==='creative'?'🕊 Criativo: Espaço 2x p/ voar, blocos infinitos!':'⛏ Sobrevivência: cuidado com as quedas!');
+  mode='play'; lockPointer();
+}
+document.getElementById('btnPlay').onclick = showMode;
+document.getElementById('btnNewTitle').onclick = ()=>{ newWorld(); showMode(); };
+document.getElementById('btnSurv').onclick = ()=>startGame('survival');
+document.getElementById('btnCreat').onclick = ()=>startGame('creative');
+document.getElementById('btnModeBack').onclick = ()=>{ modeBtns.style.display='none'; mainBtns.style.display='flex'; };
+document.getElementById('btnRespawn').onclick = respawn;
+document.getElementById('btnDeadQuit').onclick = ()=>{ document.getElementById('death').style.display='none'; mode='title'; titleEl.style.display='flex'; };
 document.getElementById('btnOptions').onclick = ()=>{
   const p=document.getElementById('optPanel'), b=document.getElementById('mainBtns');
   const open = p.style.display==='none';
@@ -334,24 +400,40 @@ function step(dt){
   if(!blockAtFeet(player.x, player.y, player.z+dz)) player.z+=dz;
   player.x=Math.max(1,Math.min(W-1.01,player.x)); player.z=Math.max(1,Math.min(D-1.01,player.z));
   // vertical (pés = player.y, altura 1.8)
-  if(inWater()){
-    player.vy = keys['Space'] ? 3.2 : Math.max(player.vy-8*dt, -4);
+  if(gameMode==='creative' && flying){
+    const up=(keys['Space']?1:0)-((keys['ShiftLeft']||keys['ShiftRight'])?1:0);
+    const nyf=player.y+up*9*dt;
+    if(!blockAtFeet(player.x,nyf,player.z)) player.y=nyf;
+    player.vy=0; player.onGround=false; falling=false;
   } else {
-    player.vy = Math.max(player.vy-26*dt, -15);
-  }
-  if(keys['Space']&&player.onGround&&!inWater()) player.vy = 8.6;
-  const ny = player.y + player.vy*dt;
-  player.onGround = false;
-  if(blockAtFeet(player.x, ny, player.z)){
-    if(player.vy<=0){
-      // pousa no topo do bloco (penetracao < 1 bloco pois vy >= -15 e dt <= .05)
-      player.y = Math.floor(ny)+1.001;
-      if(blockAtFeet(player.x, player.y, player.z)) player.y = Math.ceil(player.y)+.001;
-      player.onGround = true;
+    if(inWater()){
+      player.vy = keys['Space'] ? 3.2 : Math.max(player.vy-8*dt, -4);
+    } else {
+      player.vy = Math.max(player.vy-26*dt, -15);
     }
-    // se subindo (vy>0): bateu a cabeca, mantem y atual
-    player.vy = 0;
-  } else player.y = ny;
+    if(keys['Space']&&player.onGround&&!inWater()) player.vy = 8.6;
+    const ny = player.y + player.vy*dt;
+    const wasGround = player.onGround;
+    player.onGround = false;
+    if(player.vy<0 && !wasGround && !inWater()){ if(!falling){ falling=true; fallTop=player.y; } }
+    if(falling) fallTop=Math.max(fallTop,player.y);
+    if(blockAtFeet(player.x, ny, player.z)){
+      if(player.vy<=0){
+        // pousa no topo do bloco (penetracao < 1 bloco pois vy >= -15 e dt <= .05)
+        player.y = Math.floor(ny)+1.001;
+        if(blockAtFeet(player.x, player.y, player.z)) player.y = Math.ceil(player.y)+.001;
+        player.onGround = true;
+        if(falling){
+          falling=false;
+          const dmg=fallTop-player.y-3.5;
+          if(dmg>0 && gameMode==='survival' && !inWater()) hurt(Math.floor(dmg));
+          fallTop=0;
+        }
+      }
+      // se subindo (vy>0): bateu a cabeca, mantem y atual
+      player.vy = 0;
+    } else player.y = ny;
+  }
   if(player.y<1){ player.y=1; player.vy=0; player.onGround=true; }
 }
 
@@ -398,6 +480,17 @@ function mineTick(dt){
   if(!mouseL){ bar.style.display='none'; return; }
   const hit = rayVoxel(cam.position, dirVec(), 6);
   if(!hit||hit.b===B.BEDROCK||hit.b===B.WATER){ mineKey=null; mineProg=0; bar.style.display='none'; return; }
+  if(gameMode==='creative'){ // quebra instantânea com cooldown
+    bar.style.display='none'; creativeCd-=dt;
+    if(creativeCd<=0){
+      creativeCd=.18;
+      const drop=INFO[hit.b].drop;
+      if(drop!==255) inv[drop]=(inv[drop]||0)+1;
+      setB(hit.x,hit.y,hit.z,B.AIR);
+      rebuild(); renderRotbar();
+    }
+    mineKey=null; mineProg=0; return;
+  }
   const key = hit.x+','+hit.y+','+hit.z;
   if(mineKey!==key){ mineKey=key; mineProg=0; }
   mineProg += dt/INFO[hit.b].hard;
@@ -418,7 +511,7 @@ function placeBlock(){
   if(!inB(px,py,pz)) return;
   const cur = getB(px,py,pz);
   if(cur!==B.AIR&&cur!==B.WATER) return;
-  if((inv[id]||0)<=0){ toast('❌ Sem blocos: quebre mais!'); return; }
+  if(gameMode!=='creative'&&(inv[id]||0)<=0){ toast('❌ Sem blocos: quebre mais!'); return; }
   // não colocar dentro do player/villager
   const corners=[[-.3,0,-.3],[.3,0,-.3],[-.3,0,.3],[.3,0,.3],[-.3,1.79,-.3],[.3,1.79,.3],[-.3,1.79,.3],[.3,1.79,-.3]];
   for(const [ox,oy,oz] of corners){
@@ -427,7 +520,7 @@ function placeBlock(){
   for(const v of villagers){
     if(Math.floor(v.x)===px&&(Math.floor(v.y)===py||Math.floor(v.y+1)===py)&&Math.floor(v.z)===pz) return;
   }
-  setB(px,py,pz,id); inv[id]--; rebuild(); renderRotbar();
+  setB(px,py,pz,id); if(gameMode!=='creative') inv[id]--; rebuild(); renderRotbar();
 }
 
 // ================= inventário / rotbar =================
@@ -446,7 +539,7 @@ function renderRotbar(){
     g.fillStyle='rgba(255,255,255,.25)'; g.fillRect(0,0,16,4); g.fillStyle='rgba(0,0,0,.3)'; g.fillRect(0,0,16,1); g.fillRect(0,15,16,1); g.fillRect(0,0,1,16); g.fillRect(15,0,1,16);
     d.appendChild(c);
     const k=document.createElement('span'); k.className='k'; k.textContent=i+1; d.appendChild(k);
-    const n=document.createElement('span'); n.className='n'; n.textContent=inv[id]||0; d.appendChild(n);
+    const n=document.createElement('span'); n.className='n'; n.textContent=gameMode==='creative'?'∞':(inv[id]||0); d.appendChild(n);
     d.title=INFO[id].name;
     d.onclick=()=>{ sel=i; renderRotbar(); };
     rotbarEl.appendChild(d);
@@ -478,7 +571,7 @@ function invSlot(id,count,selected,onClick){
   d.className='invSlot'+(selected?' sel':'')+((count||0)<=0?' zero':'');
   const c=document.createElement('canvas'); c.width=c.height=16; paintMini(c,id);
   d.appendChild(c);
-  const n=document.createElement('span'); n.className='n'; n.textContent=count||0; d.appendChild(n);
+  const n=document.createElement('span'); n.className='n'; n.textContent=gameMode==='creative'?'∞':(count||0); d.appendChild(n);
   d.title=INFO[id].name;
   d.onclick=onClick;
   return d;
@@ -656,7 +749,7 @@ function loop(now){
 genWorld(seed);
 rebuild();
 makeClouds();
-renderRotbar();
+renderRotbar(); updateHearts();
 requestAnimationFrame(loop);
 </script>
 </body>
