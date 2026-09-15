@@ -42,6 +42,19 @@
   #optPanel label { display:flex; gap:10px; align-items:center; }
   #optPanel .controls { max-width:420px; line-height:1.7; color:#cfcfcf; text-align:center; }
   .ptitle { color:#fff; font-size:22px; text-shadow:2px 2px 0 #383838; margin-bottom:6px; }
+  /* ===== inventário estilo MC Java ===== */
+  #inv { position:fixed; inset:0; z-index:15; display:flex; align-items:center; justify-content:center; background:rgba(0,0,0,.45); }
+  #invPanel { background:#c6c6c6; border:3px solid #000; outline:2px solid #fff; padding:12px 16px; display:flex; flex-direction:column; align-items:center; gap:8px; color:#3f3f3f; font-size:13px; }
+  #invPanel .ptitle { color:#3f3f3f; text-shadow:none; margin:0; font-size:16px; }
+  #invHot, #invGrid { display:flex; gap:4px; }
+  #invGrid { display:grid; grid-template-columns:repeat(9,46px); }
+  .invSlot { width:46px; height:46px; background:#8b8b8b; border:2px solid #373737; border-top-color:#fff; border-left-color:#fff; position:relative; cursor:pointer; display:flex; align-items:center; justify-content:center; }
+  .invSlot canvas { width:30px; height:30px; image-rendering:pixelated; }
+  .invSlot.sel { border:2px solid #f0c040; }
+  .invSlot .n { position:absolute; bottom:0; right:3px; font-size:12px; font-weight:bold; color:#fff; text-shadow:1px 1px 0 #222; }
+  .invSlot.zero { opacity:.45; }
+  #invHint { color:#555; }
+  #btnCraft { width:auto; padding:6px 18px; font-size:13px; }
 </style>
 </head>
 <body>
@@ -67,7 +80,7 @@
     <label>Sensibilidade do mouse: <input id="sens" type="range" min="20" max="250" value="100"></label>
     <div class="controls"><b>WASD</b> mover • <b>mouse</b> olhar • <b>Espaço</b> pular/nadar • <b>Shift</b> correr •
     <b>clique esq. (segurar)</b> quebrar • <b>clique dir.</b> colocar • <b>1–8 / scroll</b> slot •
-    <b>R</b> gira a ROTBAR • <b>T / E</b> trocar com villager • <b>N</b> novo mundo</div>
+    <b>R</b> gira a ROTBAR • <b>T</b> trocar com villager • <b>E</b> inventário • <b>N</b> novo mundo</div>
     <button id="btnOptBack" class="mbtn" style="width:200px">Pronto</button>
   </div>
   <div id="foot"><span>Minicraft 1.0 (original, sem Mojang!)</span><span>requer internet (Three.js)</span></div>
@@ -77,6 +90,15 @@
   <div class="mbtns">
     <button id="btnBack" class="mbtn">Voltar ao jogo</button>
     <button id="btnQuit" class="mbtn">Salvar e sair para o título</button>
+  </div>
+</div>
+<div id="inv" style="display:none">
+  <div id="invPanel">
+    <div class="ptitle">Inventário</div>
+    <div id="invHot"></div>
+    <div id="invGrid"></div>
+    <button id="btnCraft" class="mbtn">🔨 Craft: 2 madeira → 4 tábua</button>
+    <div id="invHint">Clique num bloco para colocar no slot amarelo • <b>E</b> fecha</div>
   </div>
 </div>
 <script>
@@ -234,6 +256,8 @@ const player = { x:W/2+.5, y:8, z:D/2+.5, vy:0, onGround:false, yaw:Math.PI, pit
 let mode = 'title', sens = 1, panoA = 0, hand = null; // title | play | pause
 let keys = {};
 addEventListener('keydown', e=>{
+  if(e.code==='KeyE'){ if(mode==='play') openInv(); else if(mode==='inv') closeInv(); return; }
+  if(e.code==='Escape'&&mode==='inv'){ closeInv(); return; }
   if(mode!=='play') return;
   keys[e.code]=true;
   if(e.code==='Digit1'){sel=0;renderRotbar();} if(e.code==='Digit2'){sel=1;renderRotbar();}
@@ -241,7 +265,7 @@ addEventListener('keydown', e=>{
   if(e.code==='Digit5'){sel=4;renderRotbar();} if(e.code==='Digit6'){sel=5;renderRotbar();}
   if(e.code==='Digit7'){sel=6;renderRotbar();} if(e.code==='Digit8'){sel=7;renderRotbar();}
   if(e.code==='KeyR') rotateRotbar(1);
-  if(e.code==='KeyE'||e.code==='KeyT') tryTrade();
+  if(e.code==='KeyT') tryTrade();
   if(e.code==='KeyN') newWorld();
   if(['Space','ArrowUp'].includes(e.code)) e.preventDefault();
 });
@@ -429,13 +453,59 @@ function renderRotbar(){
   });
   updateHand();
 }
-// bloco segurado (mão em 1ª pessoa)
+// mão direita quadrada (braço blocky + bloco segurado)
 function updateHand(){
   if(hand) cam.remove(hand);
-  hand = new THREE.Mesh(new THREE.BoxGeometry(.26,.26,.26), MATS[rotbar[sel]]);
-  hand.position.set(.34,-.3,-.62); hand.rotation.set(.3,.6,0);
+  hand = new THREE.Group();
+  const arm = new THREE.Mesh(new THREE.BoxGeometry(.16,.44,.16), new THREE.MeshLambertMaterial({color:0xf5c88a}));
+  const sleeve = new THREE.Mesh(new THREE.BoxGeometry(.18,.15,.18), new THREE.MeshLambertMaterial({color:0x3b82f6}));
+  sleeve.position.y=.22;
+  const held = new THREE.Mesh(new THREE.BoxGeometry(.2,.2,.2), MATS[rotbar[sel]]);
+  held.position.set(0,.34,-.1); held.rotation.y=.5;
+  hand.add(sleeve); hand.add(arm); hand.add(held);
+  hand.position.set(.44,-.44,-.7); hand.rotation.set(.25,-.35,.12);
   cam.add(hand);
 }
+// ===== inventário (tecla E) =====
+function paintMini(c,id){
+  const g=c.getContext('2d');
+  g.fillStyle=blockColor[id]||'#fff'; g.fillRect(0,0,16,16);
+  g.fillStyle='rgba(255,255,255,.25)'; g.fillRect(0,0,16,4);
+  g.fillStyle='rgba(0,0,0,.3)'; g.fillRect(0,0,16,1); g.fillRect(0,15,16,1); g.fillRect(0,0,1,16); g.fillRect(15,0,1,16);
+}
+function invSlot(id,count,selected,onClick){
+  const d=document.createElement('div');
+  d.className='invSlot'+(selected?' sel':'')+((count||0)<=0?' zero':'');
+  const c=document.createElement('canvas'); c.width=c.height=16; paintMini(c,id);
+  d.appendChild(c);
+  const n=document.createElement('span'); n.className='n'; n.textContent=count||0; d.appendChild(n);
+  d.title=INFO[id].name;
+  d.onclick=onClick;
+  return d;
+}
+function renderInv(){
+  const hot=document.getElementById('invHot'); hot.innerHTML='';
+  rotbar.forEach((id,i)=> hot.appendChild(invSlot(id,inv[id],i===sel,()=>{ sel=i; renderRotbar(); renderInv(); })));
+  const grid=document.getElementById('invGrid'); grid.innerHTML='';
+  [0,1,2,3,4,5,6,9,10].forEach(id=> grid.appendChild(invSlot(id,inv[id],false,()=>invAssign(id))));
+}
+function invAssign(id){
+  const cur=rotbar[sel], other=rotbar.indexOf(id);
+  if(other===-1) rotbar[sel]=id;
+  else if(other!==sel){ rotbar[other]=cur; rotbar[sel]=id; }
+  renderRotbar(); renderInv();
+}
+function openInv(){
+  mode='inv'; renderInv();
+  document.getElementById('inv').style.display='flex';
+  document.getElementById('prompt').style.display='none';
+  if(document.exitPointerLock) document.exitPointerLock();
+}
+function closeInv(){
+  document.getElementById('inv').style.display='none';
+  mode='play'; lockPointer();
+}
+document.getElementById('btnCraft').onclick = ()=>{ craft(); renderInv(); };
 function rotateRotbar(dir){
   if(dir>0) rotbar.push(rotbar.shift()); else rotbar.unshift(rotbar.pop());
   renderRotbar(); toast('🔄 Rotbar girada!');
@@ -575,7 +645,7 @@ function loop(now){
   else {
     if(mode==='play'){ step(dt); updateVillagers(dt); mineTick(dt); }
     skyTick(dt); updateCam();
-    if(hand) hand.rotation.x = .3 + ((mouseL&&mode==='play') ? Math.abs(Math.sin(now*.02))*.7 : 0);
+    if(hand) hand.rotation.x = .25 + ((mouseL&&mode==='play') ? Math.abs(Math.sin(now*.02))*.7 : 0);
   }
   ren.render(scene,cam);
   document.getElementById('pos').textContent=`x:${player.x|0} y:${player.y|0} z:${player.z|0}`;
