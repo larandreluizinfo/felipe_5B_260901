@@ -216,27 +216,84 @@ addEventListener('resize', ()=>{ cam.aspect=innerWidth/innerHeight; cam.updatePr
 const hemi = new THREE.HemisphereLight(0xbfd9ff, 0x6a7a5a, .9); scene.add(hemi);
 const sun = new THREE.DirectionalLight(0xffffff, .9); scene.add(sun); scene.add(sun.target);
 
-// texturas pixeladas procedurais
-function tex(base, spots, n, top){
-  const c = document.createElement('canvas'); c.width=c.height=16;
-  const g = c.getContext('2d'); g.fillStyle=base; g.fillRect(0,0,16,16);
-  for(let i=0;i<(n||14);i++){ g.fillStyle=spots[i%spots.length]; g.fillRect((i*5+3)%16,(i*7+1)%16,2,2); }
-  if(top){ g.fillStyle=top; g.fillRect(0,0,16,5); }
-  const t = new THREE.CanvasTexture(c); t.magFilter=THREE.NearestFilter; t.minFilter=THREE.NearestFilter; return t;
+// ===== texturas 16x16 fiéis ao Minicraft original =====
+function pxCanvas(painter){
+  const c=document.createElement('canvas'); c.width=c.height=16;
+  painter(c.getContext('2d'));
+  const t=new THREE.CanvasTexture(c); t.magFilter=THREE.NearestFilter; t.minFilter=THREE.NearestFilter;
+  return { canvas:c, tex:t };
 }
+function Rnd(s){ let a=s>>>0; return ()=>{ a=(Math.imul(a,1664525)+1013904223)>>>0; return a/4294967296; }; }
+function grain(g,rnd,cols,n){ for(let i=0;i<n;i++){ g.fillStyle=cols[(rnd()*cols.length)|0]; g.fillRect((rnd()*16)|0,(rnd()*16)|0,1,1); } }
+function pDirt(g){ const r=Rnd(11); g.fillStyle='#866043'; g.fillRect(0,0,16,16); grain(g,r,['#6e4f33','#97744f','#5b422c','#7a5a40'],70); }
+function pGrassTop(g){ const r=Rnd(22); g.fillStyle='#7ab648'; g.fillRect(0,0,16,16); grain(g,r,['#5e9434','#93cf62','#6aa03e','#548c30'],75); }
+function pGrassSide(g){
+  pDirt(g); const r=Rnd(33);
+  const ds=[]; g.fillStyle='#7ab648';
+  for(let x=0;x<16;x++){ const d=3+((r()*3)|0); ds.push(d); g.fillRect(x,0,1,d); }
+  g.fillStyle='#4e7d32'; for(let x=0;x<16;x++) g.fillRect(x,ds[x],1,1);
+  for(let i=0;i<22;i++){ g.fillStyle=r()>.5?'#93cf62':'#5e9434'; g.fillRect((r()*16)|0,(r()*3)|0,1,1); }
+}
+function pStone(g){ const r=Rnd(44); g.fillStyle='#7d7d7d'; g.fillRect(0,0,16,16); grain(g,r,['#676767','#8d8d8d','#595959','#747474'],60);
+  g.fillStyle='#545454'; for(let i=0;i<4;i++) g.fillRect((r()*14)|0,(r()*14)|0,2,2); }
+function pCoal(g){
+  pStone(g); const r=Rnd(55);
+  for(let i=0;i<5;i++){ const x=1+((r()*13)|0), y=1+((r()*13)|0);
+    g.fillStyle='#232323'; g.fillRect(x,y,2,2); g.fillStyle='#000000'; g.fillRect(x,y,1,1); }
+}
+function pLogSide(g){ const r=Rnd(66); g.fillStyle='#675231'; g.fillRect(0,0,16,16);
+  g.fillStyle='#3e3018'; g.fillRect(0,0,1,16); g.fillRect(15,0,1,16);
+  for(let x=2;x<15;x+=4) g.fillRect(x,0,1,16);
+  g.fillStyle='#4a3a22'; for(let x=3;x<15;x+=4) g.fillRect(x,0,1,16);
+  for(let i=0;i<26;i++){ g.fillStyle=r()>.5?'#7a6240':'#54401f'; g.fillRect(1+((r()*14)|0),(r()*16)|0,1,2); } }
+function pLogTop(g){ g.fillStyle='#3e3018'; g.fillRect(0,0,16,16); g.fillStyle='#675231'; g.fillRect(2,2,12,12);
+  for(let y=2;y<14;y++) for(let x=2;x<14;x++){ const v=Math.max(Math.abs(x-7.5),Math.abs(y-7.5))|0; g.fillStyle=v%2?'#54401f':'#8a734f'; g.fillRect(x,y,1,1); }
+  g.fillStyle='#8a734f'; g.fillRect(7,7,2,2); }
+function pLeaves(g){ const r=Rnd(77); g.fillStyle='#2f6b1f'; g.fillRect(0,0,16,16); grain(g,r,['#245419','#3f8a2a','#1c4212','#357a24'],80);
+  g.fillStyle='#173a0e'; for(let i=0;i<9;i++) g.fillRect((r()*15)|0,(r()*15)|0,2,1); }
+function pSand(g){ const r=Rnd(88); g.fillStyle='#dbd3a0'; g.fillRect(0,0,16,16); grain(g,r,['#c4b489','#ece6bb','#b3a678'],55); }
+function pWater(g){ const r=Rnd(99); g.fillStyle='#3f76e4'; g.fillRect(0,0,16,16);
+  g.fillStyle='#6ea8f2'; for(const y of [2,7,12]){ const x=(r()*8)|0; g.fillRect(x,y,5+((r()*4)|0),1); }
+  grain(g,r,['#2c5ab5','#5a8ce8'],20); }
+function pBedrock(g){ const r=Rnd(111); g.fillStyle='#575757'; g.fillRect(0,0,16,16);
+  for(let i=0;i<6;i++){ g.fillStyle='#1f1f1f'; g.fillRect((r()*14)|0,(r()*14)|0,2,2); }
+  for(let i=0;i<5;i++){ g.fillStyle='#7f7f7f'; g.fillRect((r()*14)|0,(r()*14)|0,2,1); }
+  grain(g,r,['#2b2b2b','#8a8a8a'],25); }
+function pPlanks(g){ const r=Rnd(122); g.fillStyle='#a88450'; g.fillRect(0,0,16,16);
+  grain(g,r,['#96713f','#b8945c'],22);
+  g.fillStyle='#6b5433'; for(const y of [3,7,11,15]) g.fillRect(0,y,16,1);
+  const joints=[[4,12],[8,0],[2,10],[6,14]];
+  joints.forEach(([a,b],row)=>{ g.fillRect(a,row*4,1,3); g.fillRect(b,row*4,1,3); }); }
+function pBrick(g){ const r=Rnd(133); g.fillStyle='#b7a69e'; g.fillRect(0,0,16,16);
+  const shades=['#96543f','#8d4f3b','#9c5a44'];
+  for(let row=0;row<4;row++){ const y=row*4, off=(row%2)*2;
+    for(let k=-1;k<5;k++){ const x=k*4+off;
+      g.fillStyle=shades[(r()*3)|0]; g.fillRect(x,y,4,3);
+      g.fillStyle='#6e3a2c'; g.fillRect(x,y+2,4,1); } } }
 const MATS = {};
 function lam(t){ return new THREE.MeshLambertMaterial({map:t}); }
-MATS[B.GRASS]=[lam(tex('#6abe30',['#5aa72c','#79c84a'],16,'#7CFC6A')),lam(tex('#6abe30',['#5aa72c','#79c84a'],16,'#7CFC6A')),lam(tex('#6abe30',['#5aa72c','#79c84a'],10)),lam(tex('#8a5f3c',['#6e4a2e'],8)),lam(tex('#6abe30',['#5aa72c','#79c84a'],16,'#7CFC6A')),lam(tex('#6abe30',['#5aa72c','#79c84a'],16,'#7CFC6A'))];
-MATS[B.DIRT]=Array(6).fill(lam(tex('#8a5f3c',['#6e4a2e','#9c7148'],16)));
-MATS[B.STONE]=Array(6).fill(lam(tex('#8d8d8d',['#6f6f6f','#a8a8a8'],14)));
-MATS[B.COAL]=Array(6).fill(lam(tex('#7a7a7a',['#1c1c1c','#9a9a9a'],12)));
-MATS[B.WOOD]=Array(6).fill(lam(tex('#8a5a2e',['#6b4423','#a5713d'],14)));
-MATS[B.LEAF]=Array(6).fill(new THREE.MeshLambertMaterial({map:tex('#2d8a2d',['#3aa73a','#1e5e1e'],18), transparent:true, opacity:.95}));
-MATS[B.SAND]=Array(6).fill(lam(tex('#e0c987',['#c9ad6b','#f0dca0'],12)));
-MATS[B.WATER]=Array(6).fill(new THREE.MeshLambertMaterial({map:tex('#2b6de8',['#5a9ae8'],8), transparent:true, opacity:.7}));
-MATS[B.BEDROCK]=Array(6).fill(lam(tex('#2b2b2b',['#111111','#555555'],12)));
-MATS[B.PLANK]=Array(6).fill(lam(tex('#c0904a',['#8a5f2a','#e0b060'],12)));
-MATS[B.BRICK]=Array(6).fill(lam(tex('#b54534',['#7a2a20','#e08a7a'],14)));
+const TX = {
+  grassTop: pxCanvas(pGrassTop), grassSide: pxCanvas(pGrassSide), dirt: pxCanvas(pDirt),
+  stone: pxCanvas(pStone), coal: pxCanvas(pCoal), logSide: pxCanvas(pLogSide), logTop: pxCanvas(pLogTop),
+  leaves: pxCanvas(pLeaves), sand: pxCanvas(pSand), water: pxCanvas(pWater),
+  bedrock: pxCanvas(pBedrock), planks: pxCanvas(pPlanks), brick: pxCanvas(pBrick),
+};
+const TEXC = { // canvas p/ ícones da rotbar/inventário
+  [B.GRASS]:TX.grassSide.canvas, [B.DIRT]:TX.dirt.canvas, [B.STONE]:TX.stone.canvas,
+  [B.COAL]:TX.coal.canvas, [B.WOOD]:TX.logSide.canvas, [B.LEAF]:TX.leaves.canvas,
+  [B.SAND]:TX.sand.canvas, [B.PLANK]:TX.planks.canvas, [B.BRICK]:TX.brick.canvas,
+};
+MATS[B.GRASS]=[lam(TX.grassSide.tex),lam(TX.grassSide.tex),lam(TX.grassTop.tex),lam(TX.dirt.tex),lam(TX.grassSide.tex),lam(TX.grassSide.tex)];
+MATS[B.DIRT]=Array(6).fill(lam(TX.dirt.tex));
+MATS[B.STONE]=Array(6).fill(lam(TX.stone.tex));
+MATS[B.COAL]=Array(6).fill(lam(TX.coal.tex));
+MATS[B.WOOD]=[lam(TX.logSide.tex),lam(TX.logSide.tex),lam(TX.logTop.tex),lam(TX.logTop.tex),lam(TX.logSide.tex),lam(TX.logSide.tex)];
+MATS[B.LEAF]=Array(6).fill(lam(TX.leaves.tex));
+MATS[B.SAND]=Array(6).fill(lam(TX.sand.tex));
+MATS[B.WATER]=Array(6).fill(new THREE.MeshLambertMaterial({map:TX.water.tex, transparent:true, opacity:.7}));
+MATS[B.BEDROCK]=Array(6).fill(lam(TX.bedrock.tex));
+MATS[B.PLANK]=Array(6).fill(lam(TX.planks.tex));
+MATS[B.BRICK]=Array(6).fill(lam(TX.brick.tex));
 
 const boxGeo = new THREE.BoxGeometry(1,1,1);
 let chunkGroup = null;
@@ -534,9 +591,7 @@ function renderRotbar(){
   rotbar.forEach((id,i)=>{
     const d=document.createElement('div');
     d.className='slot'+(i===sel?' sel':'');
-    const c=document.createElement('canvas'); c.width=c.height=16;
-    const g=c.getContext('2d'); g.fillStyle=blockColor[id]||'#fff'; g.fillRect(0,0,16,16);
-    g.fillStyle='rgba(255,255,255,.25)'; g.fillRect(0,0,16,4); g.fillStyle='rgba(0,0,0,.3)'; g.fillRect(0,0,16,1); g.fillRect(0,15,16,1); g.fillRect(0,0,1,16); g.fillRect(15,0,1,16);
+    const c=document.createElement('canvas'); c.width=c.height=16; paintMini(c,id);
     d.appendChild(c);
     const k=document.createElement('span'); k.className='k'; k.textContent=i+1; d.appendChild(k);
     const n=document.createElement('span'); n.className='n'; n.textContent=gameMode==='creative'?'∞':(inv[id]||0); d.appendChild(n);
@@ -562,8 +617,9 @@ function updateHand(){
 // ===== inventário (tecla E) =====
 function paintMini(c,id){
   const g=c.getContext('2d');
-  g.fillStyle=blockColor[id]||'#fff'; g.fillRect(0,0,16,16);
-  g.fillStyle='rgba(255,255,255,.25)'; g.fillRect(0,0,16,4);
+  const src=TEXC[id];
+  if(src) g.drawImage(src,0,0,16,16);
+  else { g.fillStyle=blockColor[id]||'#fff'; g.fillRect(0,0,16,16); }
   g.fillStyle='rgba(0,0,0,.3)'; g.fillRect(0,0,16,1); g.fillRect(0,15,16,1); g.fillRect(0,0,1,16); g.fillRect(15,0,1,16);
 }
 function invSlot(id,count,selected,onClick){
